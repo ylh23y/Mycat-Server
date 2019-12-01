@@ -28,6 +28,7 @@ import io.mycat.config.model.rule.RuleConfig;
 import io.mycat.util.SplitUtil;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -55,7 +56,6 @@ public class TableConfig {
     // only has one level of parent
     private final boolean secondLevel;
     private final boolean partionKeyIsPrimaryKey;
-    private final Random rand = new Random();
 
     private volatile List<SQLTableElement> tableElementList;
     private volatile String tableStructureSQL;
@@ -153,17 +153,26 @@ public class TableConfig {
         StringBuilder tableSb = new StringBuilder();
         StringBuilder condition = new StringBuilder();
         TableConfig prevTC = null;
+        String ancestorTableName = null;
         int level = 0;
         String latestCond = null;
         while (tb.parentTC != null) {
-            tableSb.append(tb.parentTC.name).append(',');
+            ancestorTableName = tb.parentTC.name;
+            String currentTableName = tb.name;
+            if (!ancestorTableName.contains("`")){
+                ancestorTableName = "`"+ancestorTableName+"`";
+            }
+            if (!currentTableName.contains("`")){
+                currentTableName = "`"+currentTableName+"`";
+            }
+            tableSb.append(ancestorTableName).append(',');
             String relation = null;
             if (level == 0) {
-                latestCond = " " + tb.parentTC.getName() + '.' + tb.parentKey
+                latestCond = " " + ancestorTableName + '.' + tb.parentKey
                         + "=";
             } else {
-                relation = tb.parentTC.getName() + '.' + tb.parentKey + '='
-                        + tb.name + '.' + tb.joinKey;
+                relation = ancestorTableName + '.' + tb.parentKey + '='
+                        + currentTableName + '.' + tb.joinKey;
                 condition.append(relation).append(" AND ");
             }
             level++;
@@ -171,7 +180,7 @@ public class TableConfig {
             tb = tb.parentTC;
         }
         String sql = "SELECT "
-                + prevTC.parentTC.name
+                + ancestorTableName
                 + '.'
                 + prevTC.parentKey
                 + " FROM "
@@ -238,7 +247,7 @@ public class TableConfig {
     }
 
     public String getRandomDataNode() {
-        int index = Math.abs(rand.nextInt(Integer.MAX_VALUE)) % dataNodes.size();
+        int index = Math.abs(ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE)) % dataNodes.size();
         return dataNodes.get(index);
     }
 

@@ -27,15 +27,13 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.slf4j.Logger; import org.slf4j.LoggerFactory;
-
-import com.alibaba.fastjson.JSON;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.mycat.backend.datasource.PhysicalDBPool;
 import io.mycat.backend.datasource.PhysicalDatasource;
 import io.mycat.backend.mysql.nio.MySQLDataSource;
 import io.mycat.config.model.DataHostConfig;
-import io.mycat.util.TimeUtil;
 
 /**
  * @author mycat
@@ -122,13 +120,17 @@ public class MySQLHeartbeat extends DBHeartbeat {
 	 */
 	public void heartbeat() {
 		final ReentrantLock lock = this.lock;
-		lock.lock();
+		if(!lock.tryLock()){
+			return;
+		}
 		try {
 			if (isChecking.compareAndSet(false, true)) {
 				MySQLDetector detector = this.detector;
 				if (detector == null || detector.isQuit()) {
 					try {
 						detector = new MySQLDetector(this);
+						//由于没有设置导致无限循环. modifyBy zwy  todo 对应修改其他的心跳机制.
+						detector.setHeartbeatTimeout(this.getHeartbeatTimeout());
 						detector.heartbeat();
 					} catch (Exception e) {
 						LOGGER.warn(source.getConfig().toString(), e);
@@ -137,7 +139,7 @@ public class MySQLHeartbeat extends DBHeartbeat {
 					}
 					this.detector = detector;
 				} else {
-					detector.heartbeat();
+						detector.heartbeat();
 				}
 			} else {
 				MySQLDetector detector = this.detector;
@@ -170,14 +172,13 @@ public class MySQLHeartbeat extends DBHeartbeat {
 		if (this.status != OK_STATUS) {
 			switchSourceIfNeed("heartbeat error");
 		}
-//		String str = JSON.toJSONString(this);
 
-//		System.out.println(str);
 	}
 
 	private void setOk(MySQLDetector detector) {
 		switch (status) {
 		case DBHeartbeat.TIMEOUT_STATUS:
+			writeStatusMsg(source.getDbPool().getHostName(), source.getName() ,DBHeartbeat.INIT_STATUS);
 			this.status = DBHeartbeat.INIT_STATUS;
 			this.errorCount.set(0);			
 			//前一个状态为超时 当前状态为正常状态  那就马上发送一个请求 来验证状态是否恢复为Ok
@@ -191,6 +192,7 @@ public class MySQLHeartbeat extends DBHeartbeat {
 			this.errorCount.set(0);
 			break;
 		default:
+			writeStatusMsg(source.getDbPool().getHostName(), source.getName() ,DBHeartbeat.OK_STATUS);
 			this.status = OK_STATUS;
 			this.errorCount.set(0);;
 		}
@@ -203,6 +205,7 @@ public class MySQLHeartbeat extends DBHeartbeat {
 		
 		if (isStop.get()) {
 			detector.quit();
+			writeStatusMsg(source.getDbPool().getHostName(), source.getName() ,DBHeartbeat.OK_STATUS);
 			this.status = nextStatue;			
 		} else {  
 			// should continues check error status
@@ -210,18 +213,21 @@ public class MySQLHeartbeat extends DBHeartbeat {
 				//设置3秒钟之后重试.
 				if (detector != null && !detector.isQuit()) {
 	            	LOGGER.error("set Error " + errorCount + "  " +  this.source.getConfig() );
-					source.setHeartbeatRecoveryTime( TimeUtil.currentTimeMillis() + 3000);
+				//	source.setHeartbeatRecoveryTime( TimeUtil.currentTimeMillis() + 3000);
 	               // heartbeat(); // error count not enough, heart beat again
 	            }
 			} else {
 				if (detector != null ) {
 	                detector.quit();
 	            }
-	            this.status = nextStatue;
+				writeStatusMsg(source.getDbPool().getHostName(), source.getName() ,nextStatue);
+				this.status = nextStatue;	            
 				this.errorCount.set(0);
 			}
 		}
 	}
+
+
 	private void setError(MySQLDetector detector) {
 		errorCount.incrementAndGet() ;
 		nextDector(detector, ERROR_STATUS);
@@ -256,7 +262,9 @@ public class MySQLHeartbeat extends DBHeartbeat {
 	 */
 	private void switchSourceIfNeed(String reason) {
 		int switchType = source.getHostConfig().getSwitchType();
-		if (switchType == DataHostConfig.NOT_SWITCH_DS) {
+		String notSwitch = source.getHostConfig().getNotSwitch();
+		if (notSwitch.equals(DataHostConfig.FOVER_NOT_SWITCH_DS) 
+				|| switchType == DataHostConfig.NOT_SWITCH_DS) {
 			if (LOGGER.isDebugEnabled()) {
 				LOGGER.debug("not switch datasource ,for switchType is "
 						+ DataHostConfig.NOT_SWITCH_DS);
@@ -291,6 +299,7 @@ public class MySQLHeartbeat extends DBHeartbeat {
 						int theSourceHBStatus = theSourceHB.getStatus();
 						if (theSourceHBStatus == DBHeartbeat.OK_STATUS) {
 							if (switchType == DataHostConfig.SYN_STATUS_SWITCH_DS) {
+								LOGGER.warn("switchSourceIfNeed: LagTime=" + theSourceHB.getSlaveBehindMaster());
 								if (Integer.valueOf(0).equals( theSourceHB.getSlaveBehindMaster())) {
 									LOGGER.info("try to switch datasource ,slave is synchronized to master " + theSource.getConfig());
 									pool.switchSourceOrVoted(nextId, true, reason);

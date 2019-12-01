@@ -30,6 +30,8 @@ public class DataHost implements Named {
     @XmlAttribute(required = true)
     protected Integer balance;
     @XmlAttribute(required = true)
+    protected Integer balanceType;
+    @XmlAttribute(required = true)
     protected Integer maxCon;
     @XmlAttribute(required = true)
     protected Integer minCon;
@@ -50,18 +52,18 @@ public class DataHost implements Named {
     protected String slaveIDs;
 
     @XmlAttribute(required = true)
-    protected Integer maxRetryCount;
+    protected String maxRetryCount;
     
     protected String heartbeat;
     protected String connectionInitSql;
 
     protected List<WriteHost> writeHost;
 
-    public Integer getMaxRetryCount() {
+    public String getMaxRetryCount() {
 		return maxRetryCount;
 	}
 
-	public void setMaxRetryCount(Integer maxRetryCount) {
+	public void setMaxRetryCount(String maxRetryCount) {
 		this.maxRetryCount = maxRetryCount;
 	}
 
@@ -132,6 +134,14 @@ public class DataHost implements Named {
         this.balance = balance;
     }
 
+    public Integer getBalanceType() {
+        return balanceType;
+    }
+
+    public void setBalanceType(Integer balanceType) {
+        this.balanceType = balanceType;
+    }
+
     public String getDbType() {
         return dbType;
     }
@@ -177,6 +187,8 @@ public class DataHost implements Named {
         StringBuilder builder = new StringBuilder();
         builder.append("DataHost [balance=");
         builder.append(balance);
+        builder.append(", balanceType=");
+        builder.append(balanceType);
         builder.append(", maxCon=");
         builder.append(maxCon);
         builder.append(", minCon=");

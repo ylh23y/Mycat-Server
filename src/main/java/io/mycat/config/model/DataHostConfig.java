@@ -49,6 +49,7 @@ public class DataHostConfig {
 	private int maxCon = SystemConfig.DEFAULT_POOL_SIZE;
 	private int minCon = 10;
 	private int balance = PhysicalDBPool.BALANCE_NONE;
+	private int balanceType = PhysicalDBPool.RANDOM;
 	private int writeType = PhysicalDBPool.WRITE_ONLYONE_NODE;
 	private final String dbType;
 	private final String dbDriver;
@@ -66,6 +67,11 @@ public class DataHostConfig {
 	private final Set<String> dataNodes; //包含的所有dataNode名字
 	private String slaveIDs;
 	private int maxRetryCount = 3; // 心跳失败时候重试的次数. @auth zwy
+	public static final String FOVER_NOT_SWITCH_DS = "1";
+	public static final String CAN_SWITCH_DS = "0";
+
+	private String notSwitch = CAN_SWITCH_DS;
+	
 	public DataHostConfig(String name, String dbType, String dbDriver,
 			DBHostConfig[] writeHosts, Map<Integer, DBHostConfig[]> readHosts,int switchType,int slaveThreshold, boolean tempReadHostAvailable) {
 		super();
@@ -159,6 +165,14 @@ public class DataHostConfig {
 		this.balance = balance;
 	}
 
+	public int getBalanceType() {
+		return balanceType;
+	}
+
+	public void setBalanceType(int balanceType) {
+		this.balanceType = balanceType;
+	}
+
 	public String getDbType() {
 		return dbType;
 	}
@@ -233,5 +247,13 @@ public class DataHostConfig {
 	public void setMaxRetryCount(int maxRetryCount) {
 		this.maxRetryCount = maxRetryCount;
 	}
-    
+
+	public String getNotSwitch() {
+		return notSwitch;
+	}
+
+	public void setNotSwitch(String notSwitch) {
+		this.notSwitch = notSwitch;
+	}
+	
 }
